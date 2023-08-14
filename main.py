@@ -1,101 +1,47 @@
-# from nltk.corpus import stopwords
-# from textblob import TextBlob
-# from textblob import Word
-# from textblob.sentiments import NaiveBayesAnalyzer
-# import requests
-#
-#
-# # Process data
-# def preprocess_text(text):
-#     blob = TextBlob(text)
-#     tokens = [word for word in blob.words if word not in stopwords.words('english')]
-#     text = ' '.join(tokens)
-#     return text
-#
-#
-# def get_sentiment(text):
-#     blob = TextBlob(text, analyzer=NaiveBayesAnalyzer())
-#     return blob.sentiment.classification
-#
-#
-# def get_stock_sentiment(stock):
-#     api_key = '96a4926ec75b4a8491cbd30b8a348c63'
-#     url = f'https://newsapi.org/v2/everything?q={stock}&from=2023-08-01&to=2023-08-12&apiKey={api_key}'
-#
-#     try:
-#         response = requests.get(url)
-#         response.raise_for_status()  # Raise an exception for non-2xx status codes
-#         data = response.json()
-#
-#         sentiments = []
-#         for article in data['articles']:
-#             text = article['title'] + ' ' + article['description']
-#             text = preprocess_text(text)
-#
-#             sentiment = get_sentiment(text)
-#             if sentiment == 'pos':
-#                 sentiments.append(1)
-#             elif sentiment == 'neg':
-#                 sentiments.append(-1)
-#
-#         if len(sentiments) > 0:
-#             avg_sentiment = sum(sentiments) / len(sentiments)
-#             print(f'Average sentiment for {stock} is {avg_sentiment}')
-#         else:
-#             print(f'No articles found for {stock} in the specified date range.')
-#
-#     except requests.exceptions.RequestException as e:
-#         print(f'An error occurred: {e}')
-#
-#
-# get_stock_sentiment('Meta')
-
-
-import concurrent.futures
 from nltk.corpus import stopwords
 from textblob import TextBlob
 from textblob.sentiments import NaiveBayesAnalyzer
 import requests
 import config
 
-stop_words_list = stopwords.words('english')
+# Initialize stopwords
+stop_words = set(stopwords.words('english'))
 
 
 # Process data
 def preprocess_text(text):
     blob = TextBlob(text)
-    tokens = [word for word in blob.words if word not in stop_words_list]
+    tokens = [word for word in blob.words if word not in stop_words]
     text = ' '.join(tokens)
     return text
 
 
-def get_sentiment(text):
-    blob = TextBlob(text, analyzer=NaiveBayesAnalyzer())
+def get_sentiment(text, analyzer):
+    blob = TextBlob(text, analyzer=analyzer)
     return blob.sentiment.classification
 
 
-def process_article(article):
-    text = article['title'] + ' ' + article['description']
-    text = preprocess_text(text)
-    return get_sentiment(text)
-
-
-def get_stock_sentiment(stock):
+def get_stock_sentiment(stock, start, end):
     api_key = config.api_key
-    url = f'https://newsapi.org/v2/everything?q={stock}&from=2023-08-01&to=2023-08-12&apiKey={api_key}'
+    url = f'https://newsapi.org/v2/everything?q={stock}&from=start&to=end&apiKey={api_key}'
 
     try:
         response = requests.get(url)
-        response.raise_for_status()  # Raise an exception for non-2xx status codes
+        response.raise_for_status()
         data = response.json()
 
-        sentiments = []
         articles = data['articles']
+        sentiments = []
 
-        with concurrent.futures.ThreadPoolExecutor() as executor:
-            sentiment_results = list(executor.map(process_article, articles))
-
-        sentiments.extend([1 if sentiment == 'pos' else -1 for sentiment in sentiment_results])
+        sentiment_analyzer = NaiveBayesAnalyzer()
+        for article in articles:
+            text = article['title'] + ' ' + article['description']
+            text = preprocess_text(text)
+            sentiment = get_sentiment(text, sentiment_analyzer)
+            if sentiment == 'pos':
+                sentiments.append(1)
+            elif sentiment == 'neg':
+                sentiments.append(-1)
 
         if len(sentiments) > 0:
             avg_sentiment = sum(sentiments) / len(sentiments)
@@ -107,4 +53,8 @@ def get_stock_sentiment(stock):
         print(f'An error occurred: {e}')
 
 
-get_stock_sentiment('Apple')
+stock = input("Enter a stock to analyze: ")
+start_date = input("Enter a start date (format = 1999-01-01): ")
+end_date = input("Enter an end date (format = 1999-01-01): ")
+
+get_stock_sentiment(stock, start_date, end_date)
